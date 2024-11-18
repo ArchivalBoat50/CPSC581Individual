@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Gesture-Controlled Video Player</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Inline CSS -->
+  <style>
+    /* Reset default browser styles */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #121212; /* Dark background */
+      color: #FFFFFF; /* White text */
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    /* Header styling */
+    header {
+      background-color: #1E1E1E; /* Slightly lighter than background */
+      padding: 20px;
+      text-align: center;
+      position: fixed;
+      width: 100%;
+      top: 0;
+      z-index: 100;
+    }
+
+    header h1 {
+      color: #1E90FF; /* Blue accent color */
+      font-size: 32px;
+    }
+
+    /* Main content area */
+    .content {
+      margin-top: 100px; /* Space for the fixed header */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Live camera view */
+    .camera-container {
+      position: relative;
+      width: 320px;
+      height: 240px;
+      margin-bottom: 20px;
+    }
+
+    .camera-container img {
+      width: 100%;
+      border: 2px solid #1E90FF; /* Accent color */
+      border-radius: 8px;
+    }
+
+    /* Video player */
+    .video-container {
+      width: 80%;
+      max-width: 800px;
+      margin-bottom: 20px;
+    }
+
+    .video-container video {
+      width: 100%;
+      border: 2px solid #1E90FF;
+      border-radius: 8px;
+    }
+
+    /* Status message */
+    #status {
+      margin-top: 20px;
+      font-size: 18px;
+      color: #1E90FF; /* Accent color */
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1E1E1E;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #1E90FF;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Gesture-Controlled Video Player</h1>
+  </header>
+  <div class="content">
+    <!-- Live camera view -->
+    <div class="camera-container">
+      <img id="cameraView" alt="Camera View">
+    </div>
+
+    <!-- Video player -->
+    <div class="video-container">
+      <video id="videoPlayer" controls autoplay muted>
+        <source src="demo.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+    </div>
+
+    <!-- Status message -->
+    <p id="status">Connecting to WebSocket...</p>
+  </div>
+
+  <!-- JavaScript code -->
+  <script>
+    const statusDisplay = document.getElementById("status");
+    const cameraView = document.getElementById("cameraView");
+    const videoPlayer = document.getElementById("videoPlayer");
+
+    // List of video sources
+    const videoList = [
+      "demo.mp4",
+      "demo1.mp4",
+      "demo2.mp4"
+    ];
+    let currentVideoIndex = 0;
+
+    // Function to load a video by index
+    function loadVideo(index) {
+      if (index >= 0 && index < videoList.length) {
+        currentVideoIndex = index;
+        videoPlayer.src = videoList[currentVideoIndex];
+        videoPlayer.load();
+        // Play the video if in close proximity
+        if (proximityStatus === "Close Proximity") {
+          videoPlayer.play();
+        }
+      }
+    }
+
+    // Keep track of proximity status
+    let proximityStatus = "No Face Detected";
+
+    // Connect to the WebSocket server
+    const socket = new WebSocket("ws://127.0.0.1:6789");
+
+    socket.onopen = () => {
+      console.log("Connected to WebSocket server.");
+      statusDisplay.textContent = "Connected to WebSocket server.";
+    };
+
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+
+      // Handle the received message
+      if (message.type === 'frame') {
+        // Update the camera view with the received image
+        cameraView.src = 'data:image/jpeg;base64,' + message.image;
+
+        // Handle proximity
+        const proximity = message.proximity;
+        proximityStatus = proximity;
+
+        // Update the status message
+        statusDisplay.textContent = proximity;
+
+        // Control the video playback based on proximity
+        if (proximity === "Close Proximity") {
+          videoPlayer.play();
+        } else if (proximity === "Far Away" || proximity === "No Face Detected") {
+          videoPlayer.pause();
+        }
+
+        // Handle gesture commands
+        const gesture = message.gesture;
+        if (gesture === "Swipe Left") {
+          // Move to the next video
+          console.log("Swipe Left detected: Next Video");
+          if (currentVideoIndex < videoList.length - 1) {
+            loadVideo(currentVideoIndex + 1);
+          } else {
+            // Loop back to first video
+            loadVideo(0);
+          }
+        } else if (gesture === "Swipe Right") {
+          // Move to the previous video
+          console.log("Swipe Right detected: Previous Video");
+          if (currentVideoIndex > 0) {
+            loadVideo(currentVideoIndex - 1);
+          } else {
+            // Loop back to last video
+            loadVideo(videoList.length - 1);
+          }
+        }
+      }
+    };
+
+    socket.onclose = () => {
+      console.log("WebSocket connection closed.");
+      statusDisplay.textContent = "WebSocket disconnected. Retrying...";
+      setTimeout(() => {
+        location.reload(); // Reload the page to reconnect
+      }, 3000); // Retry after 3 seconds
+    };
+
+    socket.onerror = (error) => {
+      console.error("WebSocket error:", error);
+      statusDisplay.textContent = "WebSocket error. Check the console for details.";
+    };
+  </script>
+</body>
+</html>

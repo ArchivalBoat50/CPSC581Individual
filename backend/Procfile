@@ -1,0 +1,1 @@
+worker: python face_detection_server.py
